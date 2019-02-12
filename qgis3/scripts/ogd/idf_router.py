@@ -206,18 +206,18 @@ class IDFRouter:
         print(str(datetime.now()) + " started")
         from_id = self.link_to_vertex[from_link]
         to_id = self.link_to_vertex[to_link]
-
+        
         (tree,cost) = QgsGraphAnalyzer.dijkstra(self.graph,from_id,vehicle_type)
-
+        
         if tree[to_id] == -1:
             pass # since the id cannot be found in the tree 
         else:
             """ collect all the vertices from target to source """
             route_vertices = []
-            curPos = to_id 
+            curPos = to_id
             while (curPos != from_id):
                 route_vertices.append(curPos)
-                curPos = self.graph.edge(tree[curPos]).toVertex()
+                curPos = self.graph.edge(tree[curPos]).fromVertex()
         route_vertices.append(from_id)
         route_vertices.reverse()
         
@@ -229,7 +229,7 @@ class IDFRouter:
         for id in route_vertices:
             attrs,line = self.links[self.vertex_to_link[id]]
             fet = QgsFeature()
-            fet.setGeometry(QgsGeometry.fromPolyline(line))
+            fet.setGeometry(QgsGeometry.fromPolylineXY(line))
             fet.setAttributes(attrs)
             route_pr.addFeatures([fet])
         
@@ -295,7 +295,7 @@ https://www.data.gv.at/katalog/dataset/intermodales-verkehrsreferenzsystem-oster
 #idf_file = "D:/Downloads/3_routingexport_wien_ogd/Routingexport_Wien_OGD.txt"
 #idf_file = "C:/Users/anita/Downloads/3_routingexport_ogd/3_routingexport_ogd.txt"
 #idf_file = "C:/Users/anita/Documents/GitHub/QGIS-resources/qgis2/scripts/ogd/Routingexport_Wien_OGD.txt"
-idf_file = "/Users/hdtv/Documents/Flexarts/_Kunden/Markus Pock/Data/3_routingexport_ogd.txt"
+idf_file = "C:/dev/qgis/QGIS-resources/qgis3/scripts/ogd/Routingexport_Wien_OGD.txt"
 
 """
 Supported router modes are:
@@ -316,6 +316,6 @@ This router supports three different modes of transport:
 
 router.computeRoute(33000844,33114053,2)
 
-router.computeCatchment(33000844,2,2) # two minutes by car
-router.computeCatchment(33000844,0,10) # ten minutes by foot
+#router.computeCatchment(33000844,2,2) # two minutes by car
+#router.computeCatchment(33000844,0,10) # ten minutes by foot
 

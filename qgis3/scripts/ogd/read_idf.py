@@ -1,5 +1,6 @@
 from qgis.PyQt.QtCore import *
 from qgis.core import QgsProject
+import os
 
 def read_idf(idf_file):
     status = ""    
@@ -104,7 +105,7 @@ def read_idf(idf_file):
                 return [node_layer, link_layer]
             
             
-idf_file = "/Users/hdtv/Documents/Flexarts/_Kunden/Markus Pock/Data/3_routingexport_ogd.txt"
+idf_file = "C:/dev/qgis/QGIS-resources/qgis3/scripts/ogd/Routingexport_Wien_OGD.txt"
 
 layers = read_idf(idf_file)
 
