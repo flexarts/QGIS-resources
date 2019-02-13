@@ -284,9 +284,85 @@ class IDFRouter:
         QgsProject.instance().addMapLayer(reachable_layer)
 
         print(str(datetime.now()) + " finished")
-        
-        
 
+    def computeNearestPOI(self,poi_links,vehicle_type,r=0.020):
+        """ computes the catchment zone around POIs for the given vehicle type and adds it to the map """
+
+        reachable_layers = {}
+        reachable_costs = {}
+
+        upperBounds = {}
+        withinBounds = {}
+
+        num_costs = None
+        poi_id = 0
+        for from_link in poi_links:
+            poi_id += 1
+            from_id = self.link_to_vertex[from_link]
+            print('catchment zone around POI %d with size %f' %(poi_id,r))
+            print(str(datetime.now()) + " started")
+            
+            (tree,cost) = QgsGraphAnalyzer.dijkstra(self.graph,from_id,vehicle_type)
+            reachable_costs[poi_id] = (tree,cost)
+            num_costs = len(cost)
+            print("%d # costs for poi %d " % (num_costs, poi_id))
+
+            reachable_layer = QgsVectorLayer(
+                "LineString?crs=epsg:4326&field=id:integer&field=cost:double&index=yes", 
+                "reachable POI " + str(poi_id), 
+                "memory")
+            reachable_layers[poi_id] = reachable_layer
+            upperBounds[poi_id] = []
+            withinBounds[poi_id] = []
+
+            print(str(datetime.now()) + " finished")
+        
+        i = 0
+        while i < num_costs:
+            poi_id = None
+            min_cost = None
+            # find POI for which cost of current index i is minimal
+            for _poi_id in reachable_costs:
+                if min_cost == None or min_cost > reachable_costs[_poi_id][1][i]:
+                    min_cost = reachable_costs[_poi_id][1][i]
+                    poi_id = _poi_id
+            
+            # find objects for min_cost POI
+            reachable_layer = reachable_layers[poi_id]
+            reachable_pr = reachable_layer.dataProvider()
+            (tree,cost) = reachable_costs[poi_id]
+            upperBound = upperBounds[poi_id]
+            withinBound = withinBounds[poi_id]
+
+            if cost[i] > r and tree[i] != -1:
+                outVertexId = self.graph.edge(tree[i]).toVertex()
+                if cost[outVertexId] < r:
+                    upperBound.append(i)
+                    self.__addFeatureToReachability(reachable_pr, outVertexId, cost[outVertexId])
+            elif tree[i] != -1:
+                toVertexId = self.graph.edge(tree[i]).toVertex()
+                fromVertexId =  self.graph.edge(tree[i]).fromVertex()
+                withinBound.append(toVertexId)
+                withinBound.append(fromVertexId)
+                self.__addFeatureToReachability(reachable_pr, toVertexId, cost[toVertexId])
+                self.__addFeatureToReachability(reachable_pr, fromVertexId, cost[fromVertexId])
+            i = i + 1
+
+        # add layers to map
+        for poi_id in reachable_layers:
+            reachable_layers[poi_id].updateExtents()
+            QgsProject.instance().addMapLayer(reachable_layers[poi_id])
+
+        print(str(datetime.now()) + " all finished")
+
+
+    def __addFeatureToReachability(self, reachable_pr, id, cost):
+        attrs,line = self.links[self.vertex_to_link[id]]
+        attrs.append(cost)
+        fet = QgsFeature()
+        fet.setGeometry(QgsGeometry.fromPolylineXY(line))
+        fet.setAttributes(attrs)
+        reachable_pr.addFeatures([fet])
 """ 
 You can get the IDF datasets used by this router from 
 https://www.data.gv.at/katalog/dataset/intermodales-verkehrsreferenzsystem-osterreich-gip-at-beta/resource/0775cf69-7119-43ec-af09-9da1016a4b94 
@@ -296,7 +372,7 @@ https://www.data.gv.at/katalog/dataset/intermodales-verkehrsreferenzsystem-oster
 #idf_file = "C:/Users/anita/Downloads/3_routingexport_ogd/3_routingexport_ogd.txt"
 #idf_file = "C:/Users/anita/Documents/GitHub/QGIS-resources/qgis2/scripts/ogd/Routingexport_Wien_OGD.txt"
 idf_file = "C:/dev/qgis/QGIS-resources/qgis3/scripts/ogd/Routingexport_Wien_OGD.txt"
-
+#idf_file = "C:/dev/qgis/GIP/3_routingexport_ogd/3_routingexport_ogd.txt"
 """
 Supported router modes are:
 default = distance (in meters)
@@ -304,8 +380,8 @@ traveltime (in minutes)
 ambulance (faster traveltime)
 """
 
-router = IDFRouter(idf_file,mode='traveltime',bbox=QgsRectangle(16.2,48.0,16.5,48.3)) 
-router.drawLayers()
+router = IDFRouter(idf_file,mode='distance',bbox=QgsRectangle(16.2,48.0,16.5,48.3)) 
+#router.drawLayers()
 
 """ 
 This router supports three different modes of transport:
@@ -314,7 +390,8 @@ This router supports three different modes of transport:
 2 ... car 
 """
 
-router.computeRoute(33000844,33114053,2)
+#router.computeRoute(33000844,33114053,2)
+router.computeNearestPOI( (23178144,23190617), 0, 1500)
 
 #router.computeCatchment(33000844,2,2) # two minutes by car
 #router.computeCatchment(33000844,0,10) # ten minutes by foot
