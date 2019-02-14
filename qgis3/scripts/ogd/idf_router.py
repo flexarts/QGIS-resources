@@ -1,6 +1,7 @@
 from qgis.PyQt.QtCore import *
 from qgis.core import QgsProject
 from datetime import datetime
+import processing
 
 class IDFRouter:
     def __init__(self,idf_file,mode='distance',bbox=None):
@@ -294,11 +295,26 @@ class IDFRouter:
         upperBounds = {}
         withinBounds = {}
 
+        poi_layer = QgsVectorLayer(
+            "Point?crs=epsg:4326&field=id:integer&index=yes", 
+            "POIs", 
+            "memory")
+        poi_pr = poi_layer.dataProvider()
+
         num_costs = None
         poi_id = 0
         for from_link in poi_links:
             poi_id += 1
             from_id = self.link_to_vertex[from_link]
+
+            """ Add to POI layer """
+            attrs,line = self.links[from_link]
+            attrs = [ poi_id ]
+            fet = QgsFeature()
+            fet.setGeometry(QgsGeometry.fromPolylineXY(line).centroid())
+            fet.setAttributes(attrs)
+            poi_pr.addFeatures([fet])
+
             print('catchment zone around POI %d with size %f' %(poi_id,r))
             print(str(datetime.now()) + " started")
             
@@ -348,21 +364,40 @@ class IDFRouter:
                 self.__addFeatureToReachability(reachable_pr, fromVertexId, cost[fromVertexId])
             i = i + 1
 
-        # add layers to map
+        print(str(datetime.now()) + " catchments finished")
+
+        print("Generating concave hull for POI polygonal outlines")
+
+        # add reacable layers to map
         for poi_id in reachable_layers:
+            self.computeConcaveHull(reachable_layers[poi_id], 'Polygon POI %d' % (poi_id))
             reachable_layers[poi_id].updateExtents()
             QgsProject.instance().addMapLayer(reachable_layers[poi_id])
+        
+        # add poi layer to map
+        poi_layer.updateExtents()
+        QgsProject.instance().addMapLayer(poi_layer)
 
         print(str(datetime.now()) + " all finished")
+
+    def computeConcaveHull(self, layer, name):
+        hull = processing.run("qgis:knearestconcavehull", {
+            'INPUT': layer,
+            'KNEIGHBORS': 3,
+            'OUTPUT': 'memory:'+name
+        })
+        QgsProject.instance().addMapLayer(hull['OUTPUT'])
 
 
     def __addFeatureToReachability(self, reachable_pr, id, cost):
         attrs,line = self.links[self.vertex_to_link[id]]
-        attrs.append(cost)
+        attrs = [ attrs[0] ]
+        attrs.append(float(cost))
         fet = QgsFeature()
         fet.setGeometry(QgsGeometry.fromPolylineXY(line))
         fet.setAttributes(attrs)
         reachable_pr.addFeatures([fet])
+
 """ 
 You can get the IDF datasets used by this router from 
 https://www.data.gv.at/katalog/dataset/intermodales-verkehrsreferenzsystem-osterreich-gip-at-beta/resource/0775cf69-7119-43ec-af09-9da1016a4b94 
@@ -371,8 +406,11 @@ https://www.data.gv.at/katalog/dataset/intermodales-verkehrsreferenzsystem-oster
 #idf_file = "D:/Downloads/3_routingexport_wien_ogd/Routingexport_Wien_OGD.txt"
 #idf_file = "C:/Users/anita/Downloads/3_routingexport_ogd/3_routingexport_ogd.txt"
 #idf_file = "C:/Users/anita/Documents/GitHub/QGIS-resources/qgis2/scripts/ogd/Routingexport_Wien_OGD.txt"
-idf_file = "C:/dev/qgis/QGIS-resources/qgis3/scripts/ogd/Routingexport_Wien_OGD.txt"
+#idf_file = "C:/dev/qgis/QGIS-resources/qgis3/scripts/ogd/Routingexport_Wien_OGD.txt"
 #idf_file = "C:/dev/qgis/GIP/3_routingexport_ogd/3_routingexport_ogd.txt"
+idf_file = "/Development/qgis/GIP/3_routingexport_ogd.txt"
+#idf_file = "/Development/qgis/QGIS-resources/qgis3/scripts/ogd/Routingexport_Wien_OGD.txt"
+
 """
 Supported router modes are:
 default = distance (in meters)
@@ -391,7 +429,7 @@ This router supports three different modes of transport:
 """
 
 #router.computeRoute(33000844,33114053,2)
-router.computeNearestPOI( (23178144,23190617), 0, 1500)
+router.computeNearestPOI( (23178144,23190617,23226545), 0, 1500)
 
 #router.computeCatchment(33000844,2,2) # two minutes by car
 #router.computeCatchment(33000844,0,10) # ten minutes by foot
